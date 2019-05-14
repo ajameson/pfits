@@ -59,5 +59,3 @@ src/pfitsUtil_searchMode_extractPart
 src/pfitsUtil_searchmode_combineFreq
 src/pfitsUtil_searchmode_combineTime
 src/pfitsUtil_updateMetaData
-src/pfitsUtil_updateMetaData.c
-
