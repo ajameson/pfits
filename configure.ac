@@ -16,7 +16,6 @@ AC_DISABLE_SHARED
 # Automake initialization
 AM_INIT_AUTOMAKE([-Wall -Werror foreign])
 AM_CONFIG_HEADER([config.h])
-AM_PROG_AR
 
 # Checks for programs
 AC_PROG_CC
