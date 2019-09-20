@@ -52,18 +52,19 @@ int main(int argc,char *argv[])
   char nullVal = 0;
   float nullVal_f = 0;
   float *dataArray;
+  double *dataArrayFP64;
   int subint_in;
   int subint_out;
   int initflag=0;
   float bytespersample;
-  float newObsFreq;
+  double newObsFreq;
   long long sizeWriteVals = 0;
   long long writePos;
   char cval[16];
   int nsubint=0;
   char tdim[16];
   int data_colnum;
-  float freqFirst,freqLast;
+  double freqFirst,freqLast;
   for (i=1;i<argc;i++)
     {
       if (strcmp(argv[i],"-o")==0)
@@ -135,6 +136,7 @@ int main(int argc,char *argv[])
   sizeWriteVals = (long long)(((double)newNchan*(double)nsblk*(double)nsubint*(double)npol)*bytespersample);
   writeVals = (char *)malloc(sizeof(char)*sizeWriteVals);
   dataArray = (float *)malloc(sizeof(float)*nchan); 
+  dataArrayFP64 = (double *)malloc(sizeof(double)*nchan); 
   printf("Size of writeVals = %Ld\n",sizeWriteVals);
 
   fits_movnam_hdu(outfptr,BINARY_TBL,(char *)"SUBINT",0,&status);
@@ -206,12 +208,12 @@ int main(int argc,char *argv[])
 	  printf("Reading subint %d\n",k);
 	  writePos = 1+i*nchan;
 	  
-	  fits_read_col(infptr,TFLOAT,colnum_in_datFreq,k+1,1,nchan,&nullVal_f,dataArray,&initflag,&status);
+	  fits_read_col(infptr,TDOUBLE,colnum_in_datFreq,k+1,1,nchan,&nullVal_f,dataArrayFP64,&initflag,&status);
 	  if (i==0)
 	    freqFirst = dataArray[0];
 	  if (i==nIn-1)
 	    freqLast = dataArray[nchan-1];
-	  fits_write_col(outfptr,TFLOAT,colnum_out_datFreq,k+1,writePos,nchan,dataArray,&status);
+	  fits_write_col(outfptr,TDOUBLE,colnum_out_datFreq,k+1,writePos,nchan,dataArrayFP64,&status);
 	  //
 	  fits_read_col(infptr,TFLOAT,colnum_in_datWts,k+1,1,nchan,&nullVal_f,dataArray,&initflag,&status);
 	  fits_write_col(outfptr,TFLOAT,colnum_out_datWts,k+1,writePos,nchan,dataArray,&status);
@@ -248,9 +250,9 @@ int main(int argc,char *argv[])
 
   // Update more header parameters
   fits_movabs_hdu(outfptr, 1, NULL, &status);
-  printf("Frequency range = %g and %g\n",freqLast,freqFirst);
+  printf("Frequency range = %lg and %lg\n",freqLast,freqFirst);
   newObsFreq = fabs((freqLast + freqFirst)/2.0);
-  fits_update_key(outfptr, TFLOAT, (char *)"OBSFREQ", &newObsFreq, NULL, &status );
+  fits_update_key(outfptr, TDOUBLE, (char *)"OBSFREQ", &newObsFreq, NULL, &status );
 
   fits_movnam_hdu(outfptr, BINARY_TBL,(char *)"SUBINT",0,&status);
   fits_update_key(outfptr, TFLOAT, (char *)"REFFREQ", &newObsFreq, NULL, &status );
@@ -259,6 +261,7 @@ int main(int argc,char *argv[])
     // Deallocate memory
     free(dataVals);
     free(dataArray);
+    free(dataArrayFP64);
     free(writeVals);
     printf("Closing the output file\n");
     // Now close the file
