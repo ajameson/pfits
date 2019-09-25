@@ -51,6 +51,7 @@ int main(int argc,char *argv[])
   char *writeVals;
   char nullVal = 0;
   float nullVal_f = 0;
+  double nullVal_d = 0;
   float *dataArray;
   double *dataArrayFP64;
   int subint_in;
@@ -64,7 +65,8 @@ int main(int argc,char *argv[])
   int nsubint=0;
   char tdim[16];
   int data_colnum;
-  double freqFirst,freqLast;
+  double freqFirst = 0;
+  double freqLast = 0;
   for (i=1;i<argc;i++)
     {
       if (strcmp(argv[i],"-o")==0)
@@ -73,12 +75,11 @@ int main(int argc,char *argv[])
 	{
 	  strcpy(inname[nIn],argv[i]);
 	  nIn++;
-	  printf("nIn = %d\n",nIn);
 	}
     }
   sprintf(usename,"!%s",outname);
   
-  printf("pfitsUtil_searchmode_cmobineFreq version %d\n",(int)(VERSION));
+  printf("pfitsUtil_searchmode_combineFreq version %d\n",(int)(VERSION));
   printf("Output file is %s\n",outname);
   
   // Copy the first file to the output file
@@ -137,7 +138,7 @@ int main(int argc,char *argv[])
   writeVals = (char *)malloc(sizeof(char)*sizeWriteVals);
   dataArray = (float *)malloc(sizeof(float)*nchan); 
   dataArrayFP64 = (double *)malloc(sizeof(double)*nchan); 
-  printf("Size of writeVals = %Ld\n",sizeWriteVals);
+  printf("Size of writeVals = %lld\n",sizeWriteVals);
 
   fits_movnam_hdu(outfptr,BINARY_TBL,(char *)"SUBINT",0,&status);
   fits_get_colnum(outfptr, CASEINSEN, "DATA", &colnum_data_out, &status);  
@@ -170,10 +171,8 @@ int main(int argc,char *argv[])
   // Now increase sizes for DAT_FREQ, DAT_WTS, DAT_SCL, DAT_OFFS
   fits_get_colnum(outfptr, CASEINSEN, "DAT_FREQ", &colnum_out_datFreq, &status);  
   if (status) {fits_report_error(stderr, status); exit(1);}
-  printf("Colnum = %d %d\n",colnum_out_datFreq,newNchan);
   fits_modify_vector_len(outfptr,colnum_out_datFreq,newNchan*npol,&status);
   if (status) {fits_report_error(stderr, status); exit(1);}
-  printf("GOT HERE\n");
   
   fits_get_colnum(outfptr, CASEINSEN, "DAT_WTS", &colnum_out_datWts, &status);  
   fits_modify_vector_len(outfptr,colnum_out_datWts,newNchan*npol,&status);
@@ -203,16 +202,16 @@ int main(int argc,char *argv[])
       fits_get_colnum(infptr, CASEINSEN, "DAT_OFFS", &colnum_in_datOffs, &status);  
       if (status) fits_report_error(stderr, status);
       
+	    printf("Reading %d subints\n", nsubint);
       for (k=0;k<nsubint;k++)
 	{
-	  printf("Reading subint %d\n",k);
 	  writePos = 1+i*nchan;
 	  
-	  fits_read_col(infptr,TDOUBLE,colnum_in_datFreq,k+1,1,nchan,&nullVal_f,dataArrayFP64,&initflag,&status);
+	  fits_read_col(infptr,TDOUBLE,colnum_in_datFreq,k+1,1,nchan,&nullVal_d,dataArrayFP64,&initflag,&status);
 	  if (i==0)
-	    freqFirst = dataArray[0];
+	    freqFirst = dataArrayFP64[0];
 	  if (i==nIn-1)
-	    freqLast = dataArray[nchan-1];
+	    freqLast = dataArrayFP64[nchan-1];
 	  fits_write_col(outfptr,TDOUBLE,colnum_out_datFreq,k+1,writePos,nchan,dataArrayFP64,&status);
 	  //
 	  fits_read_col(infptr,TFLOAT,colnum_in_datWts,k+1,1,nchan,&nullVal_f,dataArray,&initflag,&status);
@@ -250,12 +249,12 @@ int main(int argc,char *argv[])
 
   // Update more header parameters
   fits_movabs_hdu(outfptr, 1, NULL, &status);
-  printf("Frequency range = %lg and %lg\n",freqLast,freqFirst);
+  printf("Frequency range = %lf to %lf\n", freqFirst, freqLast);
   newObsFreq = fabs((freqLast + freqFirst)/2.0);
   fits_update_key(outfptr, TDOUBLE, (char *)"OBSFREQ", &newObsFreq, NULL, &status );
 
   fits_movnam_hdu(outfptr, BINARY_TBL,(char *)"SUBINT",0,&status);
-  fits_update_key(outfptr, TFLOAT, (char *)"REFFREQ", &newObsFreq, NULL, &status );
+  fits_update_key(outfptr, TDOUBLE, (char *)"REFFREQ", &newObsFreq, NULL, &status );
 
   
     // Deallocate memory
@@ -267,5 +266,6 @@ int main(int argc,char *argv[])
     // Now close the file
     fits_close_file(outfptr,  &status);
     if (status) fits_report_error(stderr, status);
-    
+ 
+  return 0;   
 }
