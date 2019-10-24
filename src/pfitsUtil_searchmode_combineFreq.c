@@ -62,54 +62,79 @@ int main(int argc,char *argv[])
   long long sizeWriteVals = 0;
   long long writePos;
   char cval[16];
-  int nsubint=0;
+  int nsubints[MAX_SUBBANDS];
   char tdim[16];
   int data_colnum;
   double freqFirst = 0;
   double freqLast = 0;
+  int force_merge = 0;
   for (i=1;i<argc;i++)
     {
-      if (strcmp(argv[i],"-o")==0)
-	strcpy(outname,argv[++i]);
+      if (strcmp(argv[i],"-f")==0)
+        force_merge = 1; 
+      else if (strcmp(argv[i],"-o")==0)
+        strcpy(outname,argv[++i]);
       else
-	{
-	  strcpy(inname[nIn],argv[i]);
-	  nIn++;
-	}
+        {
+          strcpy(inname[nIn],argv[i]);
+          nIn++;
+        }
     }
   sprintf(usename,"!%s",outname);
   
   printf("pfitsUtil_searchmode_combineFreq version %d\n",(int)(VERSION));
-  printf("Output file is %s\n",outname);
   
-  // Copy the first file to the output file
-  /* Open the input file */
-  if ( !fits_open_file(&infptr, inname[0], READONLY, &status) )
+  // in case the nsubint are different - use the smallest one
+  for (i=0; i<nIn; i++)
+  {
+    if ( !fits_open_file(&infptr, inname[i], READONLY, &status) )
     {
-      /* Create the output file */
-      if ( !fits_create_file(&outfptr, usename, &status) )
-	{
-	  /* Copy every HDU until we get an error */
-	  while( !fits_movabs_hdu(infptr, hdu++, NULL, &status) )
-	    fits_copy_hdu(infptr, outfptr, 0, &status);
-	  /* Reset status after normal error */
-	  if (status == END_OF_FILE) status = 0;	  
-	}
       fits_movnam_hdu(infptr,BINARY_TBL,(char *)"SUBINT",0,&status);
-      fits_read_key(infptr,TINT,"NCHAN",&nchan,NULL,&status);
-      fits_read_key(infptr,TINT,"NPOL",&npol,NULL,&status);
-      fits_read_key(infptr,TINT,"NSBLK",&nsblk,NULL,&status);
-      fits_read_key(infptr,TINT,"NBITS",&nbit,NULL,&status);
-      printf("Nchan = %d, npol = %d nsblk = %d nbit = %d\n",nchan,npol,nsblk,nbit);
-      fits_read_key(infptr,TINT,"NAXIS2",&nsubint,NULL,&status);
+      fits_read_key(infptr,TINT,"NAXIS2",&nsubints[i],NULL,&status);
       fits_close_file(infptr, &status);
     }
+  }
 
-  // SET NSUBINT TO 1
-  //  nsubint = 2;
-  // REMOVE THAT
+  int nsubint = 1e9;
+  int ifile = 0;
+  for (i=0; i<nIn; i++)
+  {
+    if ((force_merge == 0) && (nsubints[i] != nsubints[0]))
+    {
+      printf ("Error: Nsubints different in files %d vs %d\n", nsubints[0], nsubints[i]);
+      return (EXIT_FAILURE);
+    }
+    if (nsubints[i] < nsubint)
+    {
+      nsubint = nsubints[i];
+      ifile = i;
+    }
+  }
 
-  
+  printf("Output file is %s\n",outname);
+
+  /* Open the input file */
+  if ( !fits_open_file(&infptr, inname[ifile], READONLY, &status) )
+  {
+    // Copy the first file to the output file
+    if ( !fits_create_file(&outfptr, usename, &status) )
+    {
+      /* Copy every HDU until we get an error */
+      while( !fits_movabs_hdu(infptr, hdu++, NULL, &status) )
+        fits_copy_hdu(infptr, outfptr, 0, &status);
+      /* Reset status after normal error */
+      if (status == END_OF_FILE) status = 0;          
+    }
+
+    fits_movnam_hdu(infptr,BINARY_TBL,(char *)"SUBINT",0,&status);
+    fits_read_key(infptr,TINT,"NCHAN",&nchan,NULL,&status);
+    fits_read_key(infptr,TINT,"NPOL",&npol,NULL,&status);
+    fits_read_key(infptr,TINT,"NSBLK",&nsblk,NULL,&status);
+    fits_read_key(infptr,TINT,"NBITS",&nbit,NULL,&status);
+    printf("Nchan = %d, npol = %d nsblk = %d nbit = %d\n",nchan,npol,nsblk,nbit);
+    fits_close_file(infptr, &status);
+  }
+
   bytespersample = nbit/8.0;
   printf("Created initial file\n");
   /* if error occured, print out error message */
@@ -171,11 +196,11 @@ int main(int argc,char *argv[])
   // Now increase sizes for DAT_FREQ, DAT_WTS, DAT_SCL, DAT_OFFS
   fits_get_colnum(outfptr, CASEINSEN, "DAT_FREQ", &colnum_out_datFreq, &status);  
   if (status) {fits_report_error(stderr, status); exit(1);}
-  fits_modify_vector_len(outfptr,colnum_out_datFreq,newNchan*npol,&status);
+  fits_modify_vector_len(outfptr,colnum_out_datFreq,newNchan,&status);
   if (status) {fits_report_error(stderr, status); exit(1);}
   
   fits_get_colnum(outfptr, CASEINSEN, "DAT_WTS", &colnum_out_datWts, &status);  
-  fits_modify_vector_len(outfptr,colnum_out_datWts,newNchan*npol,&status);
+  fits_modify_vector_len(outfptr,colnum_out_datWts,newNchan,&status);
   if (status) {fits_report_error(stderr, status); exit(1);}
   
   fits_get_colnum(outfptr, CASEINSEN, "DAT_SCL", &colnum_out_datScl, &status);  
@@ -202,46 +227,46 @@ int main(int argc,char *argv[])
       fits_get_colnum(infptr, CASEINSEN, "DAT_OFFS", &colnum_in_datOffs, &status);  
       if (status) fits_report_error(stderr, status);
       
-	    printf("Reading %d subints\n", nsubint);
+            printf("Reading %d subints\n", nsubint);
       for (k=0;k<nsubint;k++)
-	{
-	  writePos = 1+i*nchan;
-	  
-	  fits_read_col(infptr,TDOUBLE,colnum_in_datFreq,k+1,1,nchan,&nullVal_d,dataArrayFP64,&initflag,&status);
-	  if (i==0)
-	    freqFirst = dataArrayFP64[0];
-	  if (i==nIn-1)
-	    freqLast = dataArrayFP64[nchan-1];
-	  fits_write_col(outfptr,TDOUBLE,colnum_out_datFreq,k+1,writePos,nchan,dataArrayFP64,&status);
-	  //
-	  fits_read_col(infptr,TFLOAT,colnum_in_datWts,k+1,1,nchan,&nullVal_f,dataArray,&initflag,&status);
-	  fits_write_col(outfptr,TFLOAT,colnum_out_datWts,k+1,writePos,nchan,dataArray,&status);
-	  if (status) {fits_report_error(stderr, status); exit(1);}
+        {
+          writePos = 1+i*nchan;
+          
+          fits_read_col(infptr,TDOUBLE,colnum_in_datFreq,k+1,1,nchan,&nullVal_d,dataArrayFP64,&initflag,&status);
+          if (i==0)
+            freqFirst = dataArrayFP64[0];
+          if (i==nIn-1)
+            freqLast = dataArrayFP64[nchan-1];
+          fits_write_col(outfptr,TDOUBLE,colnum_out_datFreq,k+1,writePos,nchan,dataArrayFP64,&status);
+          //
+          fits_read_col(infptr,TFLOAT,colnum_in_datWts,k+1,1,nchan,&nullVal_f,dataArray,&initflag,&status);
+          fits_write_col(outfptr,TFLOAT,colnum_out_datWts,k+1,writePos,nchan,dataArray,&status);
+          if (status) {fits_report_error(stderr, status); exit(1);}
 
-	  for (p=0;p<npol;p++)
-	    {
-	      //
-	      // DAT_OFFS and DAT_SCL also change with polarisation
-	      writePos = 1+p*newNchan+i*nchan;
-	      fits_read_col(infptr,TFLOAT,colnum_in_datScl,k+1,1+p*nchan,nchan,&nullVal_f,dataArray,&initflag,&status);
-	      fits_write_col(outfptr,TFLOAT,colnum_out_datScl,k+1,writePos,nchan,dataArray,&status);
-	      //
+          for (p=0;p<npol;p++)
+            {
+              //
+              // DAT_OFFS and DAT_SCL also change with polarisation
+              writePos = 1+p*newNchan+i*nchan;
+              fits_read_col(infptr,TFLOAT,colnum_in_datScl,k+1,1+p*nchan,nchan,&nullVal_f,dataArray,&initflag,&status);
+              fits_write_col(outfptr,TFLOAT,colnum_out_datScl,k+1,writePos,nchan,dataArray,&status);
+              //
 
-	      fits_read_col(infptr,TFLOAT,colnum_in_datOffs,k+1,1+p*nchan,nchan,&nullVal_f,dataArray,&initflag,&status);
-	      fits_write_col(outfptr,TFLOAT,colnum_out_datOffs,k+1,writePos,nchan,dataArray,&status);
-	      fits_read_col(infptr,TBYTE,colnum_data_in,k+1,1+(p*nchan*nsblk)*bytespersample,nchan*bytespersample*nsblk,&nullVal,dataVals,&initflag,&status);
-	      for (j=0;j<nsblk;j++)
-		{
-		  writePos = (long long)(((double)k*npol*newNchan*nsblk + (double)p*newNchan*nsblk + (double)j*newNchan + (double)i*nchan)*bytespersample);
-		  if (writePos < 0 || writePos >= sizeWriteVals) {
-		    printf("ERROR: writePos = %Ld (sizeWriteVals = %Ld)\n",writePos,sizeWriteVals);
-		    exit(1);
-		  }
-		  memcpy(writeVals+writePos,dataVals+(int)(j*nchan*bytespersample),nchan*bytespersample);
-		}
-	    }
-	}
-      fits_close_file(infptr, &status);	      
+              fits_read_col(infptr,TFLOAT,colnum_in_datOffs,k+1,1+p*nchan,nchan,&nullVal_f,dataArray,&initflag,&status);
+              fits_write_col(outfptr,TFLOAT,colnum_out_datOffs,k+1,writePos,nchan,dataArray,&status);
+              fits_read_col(infptr,TBYTE,colnum_data_in,k+1,1+(p*nchan*nsblk)*bytespersample,nchan*bytespersample*nsblk,&nullVal,dataVals,&initflag,&status);
+              for (j=0;j<nsblk;j++)
+                {
+                  writePos = (long long)(((double)k*npol*newNchan*nsblk + (double)p*newNchan*nsblk + (double)j*newNchan + (double)i*nchan)*bytespersample);
+                  if (writePos < 0 || writePos >= sizeWriteVals) {
+                    printf("ERROR: writePos = %Ld (sizeWriteVals = %Ld)\n",writePos,sizeWriteVals);
+                    exit(1);
+                  }
+                  memcpy(writeVals+writePos,dataVals+(int)(j*nchan*bytespersample),nchan*bytespersample);
+                }
+            }
+        }
+      fits_close_file(infptr, &status);              
     }
   printf("Writing the data\n");
   for (i=0;i<nsubint;i++)
