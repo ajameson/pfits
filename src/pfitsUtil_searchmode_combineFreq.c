@@ -67,6 +67,8 @@ int main(int argc,char *argv[])
   int data_colnum;
   double freqFirst = 0;
   double freqLast = 0;
+  double obsBw = 0;
+  double newObsBw = 0;
   int force_merge = 0;
   for (i=1;i<argc;i++)
     {
@@ -89,6 +91,10 @@ int main(int argc,char *argv[])
   {
     if ( !fits_open_file(&infptr, inname[i], READONLY, &status) )
     {
+      fits_movabs_hdu(infptr, 1, NULL, &status);
+      fits_read_key(infptr, TDOUBLE, (char *) "OBSBW", &obsBw, NULL, &status);
+      newObsBw += obsBw;
+
       fits_movnam_hdu(infptr,BINARY_TBL,(char *)"SUBINT",0,&status);
       fits_read_key(infptr,TINT,"NAXIS2",&nsubints[i],NULL,&status);
       fits_close_file(infptr, &status);
@@ -277,6 +283,7 @@ int main(int argc,char *argv[])
   printf("Frequency range = %lf to %lf\n", freqFirst, freqLast);
   newObsFreq = fabs((freqLast + freqFirst)/2.0);
   fits_update_key(outfptr, TDOUBLE, (char *)"OBSFREQ", &newObsFreq, NULL, &status );
+  fits_update_key(outfptr, TDOUBLE, (char *)"OBSBW", &newObsBw, NULL, &status );
 
   fits_movnam_hdu(outfptr, BINARY_TBL,(char *)"SUBINT",0,&status);
   fits_update_key(outfptr, TDOUBLE, (char *)"REFFREQ", &newObsFreq, NULL, &status );
