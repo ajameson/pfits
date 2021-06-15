@@ -17,9 +17,21 @@
 #include <stdlib.h>
 #include "fitsio.h"
 #include <stdint.h>
+#include <unistd.h>
 
 #define VERSION 1.0
 #define MAX_SUBBANDS 30
+
+void usage(void);
+
+void usage()
+{
+  fprintf(stdout, "pfitsUtil_searchmode_combineFreq [opts] inputs\n");
+  fprintf(stdout, "  input       input files, at least 2 required\n");
+  fprintf(stdout, "  -f          force combination\n");
+  fprintf(stdout, "  -h          display usage\n");
+  fprintf(stdout, "  -o output   output filename\n");
+}
 
 int main(int argc,char *argv[])
 {
@@ -70,18 +82,51 @@ int main(int argc,char *argv[])
   double obsBw = 0;
   double newObsBw = 0;
   int force_merge = 0;
-  for (i=1;i<argc;i++)
+
+  int arg;
+  while ((arg = getopt(argc, argv, "fho:")) != -1)
+  {
+    switch (arg)
     {
-      if (strcmp(argv[i],"-f")==0)
-        force_merge = 1; 
-      else if (strcmp(argv[i],"-o")==0)
-        strcpy(outname,argv[++i]);
-      else
-        {
-          strcpy(inname[nIn],argv[i]);
-          nIn++;
-        }
+      case 'f':
+        force_merge = 1;
+        break;
+
+      case 'h':
+        usage ();
+        return 0;
+
+      case 'o':
+        strcpy(outname, optarg);
+        break;
+
+      default:
+        fprintf(stderr, "ERROR: Unrecognised command line option\n");
+        usage();
+        return EXIT_FAILURE;
     }
+  }
+
+  int num_input_files = argc - optind;
+  if (num_input_files < 2)
+  {
+    fprintf(stderr, "ERROR: 2 command line arguments are required\n");
+    usage();
+    exit(EXIT_FAILURE);
+  }
+
+  if (strlen(outname) == 0)
+  {
+    fprintf(stderr, "ERROR: output filename must be specified\n");
+    usage();
+    return EXIT_FAILURE;
+  }
+
+  for (i=0; i<num_input_files; i++)
+  {
+    strcpy(inname[nIn],argv[optind + i]);
+    nIn++;
+  }
   sprintf(usename,"!%s",outname);
   
   printf("pfitsUtil_searchmode_combineFreq version %d\n",(int)(VERSION));
